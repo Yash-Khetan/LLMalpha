@@ -1,0 +1,41 @@
+import { pgTable, uuid, text, timestamp, json } from "drizzle-orm/pg-core";
+
+// users table
+export const users = pgTable("users", {
+  id: text("id").primaryKey(), // Using text because Firebase UIDs are strings
+  email: text("email").notNull().unique(),
+  password: text("password"), // Can be null if they use Google Login
+  name: text("name"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// ─── Documents Table ───
+export const documents = pgTable("documents", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  userId: text("user_id") // Changed to text to match users.id
+    .references(() => users.id, { onDelete: "cascade" })
+    .notNull(),
+  name: text("name").notNull(),
+  uploadedAt: timestamp("uploaded_at").defaultNow().notNull(),
+});
+
+// ─── Chunks Table ───
+export const chunks = pgTable("chunks", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  documentId: uuid("document_id")
+    .references(() => documents.id, { onDelete: "cascade" })
+    .notNull(),
+  content: text("content").notNull(),
+  embedding: json("embedding").notNull(),
+});
+
+// ─── Chats Table ───
+export const chats = pgTable("chats", {
+  id: uuid("id").defaultRandom().primaryKey(),
+  documentId: uuid("document_id")
+    .references(() => documents.id, { onDelete: "cascade" })
+    .notNull(),
+  question: text("question").notNull(),
+  response: text("response").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
