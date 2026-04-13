@@ -1,203 +1,190 @@
+# DocuMind — Intelligent Document Analysis Platform
 
-# LLMalpha — Financial Document Intelligence Engine
-
-LLMalpha is a backend system that enables users to upload financial documents (PDF/Excel) and query them using natural language. It implements a Retrieval-Augmented Generation (RAG) pipeline using chunking, embeddings, and semantic similarity search to provide context-aware responses.
+DocuMind is a full-stack application that lets users upload PDF documents and query them using natural language. It implements a Retrieval-Augmented Generation (RAG) pipeline — chunking documents, generating embeddings, performing semantic search, and streaming AI-powered answers in real time.
 
 ---
 
 ## 🚀 Features
 
-- Upload and process financial documents (PDF, Excel)
-- Extract and clean unstructured text
-- Chunk large documents with overlap for context preservation
-- Generate embeddings using Gemini Embedding API
-- Perform semantic similarity search using cosine similarity
-- Retrieve relevant document segments for query answering
-- Context-aware responses using LLMs
+- **PDF Upload & Processing** — Drop in any PDF and DocuMind extracts, chunks, and indexes the content automatically
+- **Semantic Search** — Questions are embedded and matched against document chunks using cosine similarity
+- **Streamed AI Responses** — Answers stream token-by-token using Gemini, providing a real-time chat experience
+- **Chat History** — All Q&A pairs are persisted and restored across sessions
+- **Firebase Authentication** — Secure Google & email/password login with per-user document isolation
+- **Per-User Rate Limiting** — 2 LLM queries per hour to protect API key usage
+- **Deploy-Ready** — Configured for Vercel (frontend) + Render (backend) with environment-based configuration
 
 ---
 
 ## 🧠 System Architecture
 
 ```
-
-Client (Postman / Frontend)
-↓
-Node.js Backend (Express)
-↓
-File Upload → Text Extraction → Chunking → Embeddings
-↓
-PostgreSQL (Neon DB)
-↓
-Query → Embedding → Similarity Search → LLM → Response
-
+Frontend (React + Vite)  →  Firebase Auth  →  Backend (Express.js)
+                                                  ↓
+                                        PDF Upload → Text Extraction → Chunking → Embeddings
+                                                  ↓
+                                          PostgreSQL (Neon DB)
+                                                  ↓
+                                   Query → Embedding → Similarity Search → Gemini LLM → Streamed Response
 ```
 
 ---
 
 ## ⚙️ Tech Stack
 
-**Backend**
-- Node.js
-- Express.js
-
-**AI / ML**
-- Gemini Embedding API
-- LLM API (Gemini / OpenAI)
-
-**Database**
-- PostgreSQL (Neon DB)
-
-**Libraries**
-- multer (file uploads)
-- pdf-parse (PDF text extraction)
-- xlsx (Excel parsing)
-- compute-cosine-similarity
-
----
-
-## 🧩 Core Concepts
-
-### 1. Chunking with Overlap
-Documents are split into smaller chunks (≈500 characters) with overlapping regions to preserve semantic continuity.
-
-### 2. Embeddings
-Each chunk is converted into a high-dimensional vector representing its semantic meaning.
-
-### 3. Semantic Similarity
-User queries are embedded and compared against stored chunk embeddings using cosine similarity.
-
-### 4. Retrieval-Augmented Generation (RAG)
-Top-K relevant chunks are passed as context to the LLM to generate accurate, context-aware responses.
-
----
-
-## 🔄 Pipeline
-
-### 📥 Ingestion Pipeline
-
-```
-
-Document → Text Extraction → Cleaning → Chunking → Embeddings → Storage
-
-```
-
-### 🔍 Query Pipeline
-
-```
-
-User Query → Embedding → Similarity Search → Top-K Chunks → LLM → Response
-
-```
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | React 19, Vite, React Router, Lucide Icons |
+| **Backend** | Node.js, Express.js |
+| **Auth** | Firebase Authentication (Google + Email/Password) |
+| **AI / ML** | Gemini API (Embeddings + Generation) |
+| **Database** | PostgreSQL (Neon DB) via Drizzle ORM |
+| **File Processing** | Multer (memory storage), pdf-parse |
+| **Security** | Helmet, CORS, Firebase Admin SDK, express-rate-limit |
 
 ---
 
 ## 🗄️ Database Schema
 
-### Documents Table
-- `id` (UUID)
-- `name`
-- `uploaded_at`
+### Users
+| Column | Type |
+|--------|------|
+| `id` | TEXT (Firebase UID) |
+| `email` | TEXT |
+| `name` | TEXT |
+| `created_at` | TIMESTAMP |
 
-### Chunks Table
-- `id` (UUID)
-- `document_id` (FK)
-- `content` (TEXT)
-- `embedding` (JSON / ARRAY)
+### Documents
+| Column | Type |
+|--------|------|
+| `id` | UUID |
+| `name` | TEXT |
+| `user_id` | TEXT (FK → Users) |
+| `uploaded_at` | TIMESTAMP |
 
-### Chats Table (Optional)
-- `id`
-- `document_id`
-- `question`
-- `response`
-- `created_at`
+### Chunks
+| Column | Type |
+|--------|------|
+| `id` | UUID |
+| `document_id` | UUID (FK → Documents) |
+| `content` | TEXT |
+| `embedding` | JSON |
+
+### Chats
+| Column | Type |
+|--------|------|
+| `id` | UUID |
+| `document_id` | UUID (FK → Documents) |
+| `question` | TEXT |
+| `response` | TEXT |
+| `created_at` | TIMESTAMP |
 
 ---
 
 ## 📡 API Endpoints
 
-### Upload Document
-```
+All routes (except `/`) require a valid Firebase ID token in the `Authorization: Bearer <token>` header.
 
-POST /upload
+| Method | Route | Description |
+|--------|-------|-------------|
+| `GET` | `/` | Health check |
+| `GET` | `/api/history` | Fetch user's latest document and chat history |
+| `POST` | `/api/upload` | Upload a PDF — extracts, chunks, embeds, and stores |
+| `POST` | `/api/query` | Ask a question — streams the LLM response in real time |
 
-```
-- Accepts PDF/Excel file
-- Processes and stores chunk embeddings
-
----
-
-### Query Document
-```
-
-POST /query
-
-````
-**Body:**
+### Query Body
 ```json
 {
-  "document_id": "uuid",
-  "question": "What are the key risks?"
+  "documentId": "uuid",
+  "question": "What does section 3 say about compliance?"
 }
-````
+```
 
 ---
 
-## 🧠 How Retrieval Works
+## 🔄 Pipeline
 
-1. Convert user query into embedding
-2. Fetch all chunk embeddings for the document
-3. Compute cosine similarity between query and each chunk
-4. Rank chunks by similarity score
-5. Select top-K relevant chunks
-6. Pass chunk text as context to LLM
+### Ingestion
+```
+PDF Upload → Text Extraction → Chunking (400 chars, 100 overlap) → Embedding (Gemini) → PostgreSQL
+```
 
----
-
-## ⚠️ Limitations
-
-* PDF extraction may produce noisy or unstructured text
-* No OCR support for scanned PDFs (future scope)
-* Linear similarity search (not optimized for large-scale data)
-* No authentication or access control (planned)
-
----
-
-## 🚀 Future Improvements
-
-* Vector database integration (Pinecone / pgvector)
-* Async processing with job queues (BullMQ)
-* Streaming LLM responses
-* Multi-document querying
-* Financial metric extraction and visualization
-* Secure handling of sensitive financial data
+### Retrieval
+```
+User Query → Embed Query → Cosine Similarity vs Stored Chunks → Top 3 Chunks → Gemini LLM → Streamed Response
+```
 
 ---
 
 ## 🧪 Running Locally
 
+### Prerequisites
+- Node.js 18+
+- A Neon PostgreSQL database
+- A Firebase project with Authentication enabled
+- A Gemini API key
+
+### Backend
 ```bash
-git clone <repo>
-cd llmalpha
+cd backend
 npm install
+# Create .env with: DATABASE_URL, GEMINI_API_KEY, FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
+npm start
+```
+
+### Frontend
+```bash
+cd frontend
+npm install
+# Create .env with: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, etc.
 npm run dev
 ```
 
 ---
 
+## 🌐 Deployment
+
+| Component | Platform | Start Command |
+|-----------|----------|---------------|
+| Frontend | Vercel | Auto-detected (Vite) |
+| Backend | Render | `npm start` → `node index.js` |
+
+### Environment Variables
+
+**Render (Backend):** `DATABASE_URL`, `GEMINI_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FRONTEND_URL`
+
+**Vercel (Frontend):** `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`
+
+---
+
+## ⚠️ Limitations
+
+- PDF extraction may produce noisy text from complex layouts
+- No OCR support for scanned/image-based PDFs
+- Linear similarity search (not optimized for millions of chunks)
+- Single-document context per session
+
+---
+
+## 🚀 Future Improvements
+
+- Vector database integration (pgvector / Pinecone) for faster retrieval at scale
+- Multi-document querying across an entire knowledge base
+- Async processing with job queues for large document uploads
+- OCR support for scanned documents
+- Markdown rendering for AI responses
+
+---
+
 ## 💡 Key Learnings
 
-* Implemented end-to-end RAG pipeline from scratch
-* Understood embedding-based semantic search
-* Designed backend systems for LLM-powered applications
-* Explored trade-offs in chunking, retrieval, and context generation
+- Built an end-to-end RAG pipeline from scratch without high-level abstractions
+- Implemented streaming LLM responses from backend to frontend using chunked transfer encoding
+- Designed a secure multi-tenant system with Firebase Auth + per-user data isolation
+- Explored trade-offs in chunking strategies, embedding models, and retrieval methods
 
 ---
 
 ## 📌 Summary
 
-LLMalpha demonstrates how large unstructured financial documents can be transformed into queryable knowledge systems using modern LLM techniques. The project focuses on system design, retrieval logic, and backend architecture rather than relying on high-level abstractions.
-
----
-
-```
+DocuMind demonstrates how unstructured documents can be transformed into queryable knowledge systems using modern AI techniques. The project focuses on practical system design — retrieval logic, streaming architecture, authentication, and production deployment — rather than relying on off-the-shelf RAG frameworks.
