@@ -16,7 +16,7 @@ const Login = () => {
     setIsLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      console.log("Logged in:");
+      console.log("Login successful.");
       navigate('/chat');
     } catch (err) {
       setError("Invalid login credentials.");
@@ -30,7 +30,7 @@ const Login = () => {
     setError('');
     try {
       const result = await signInWithPopup(auth, googleProvider);
-      console.log("Logged in with Google:", result.user);
+      console.log("Google login successful.");
       navigate('/chat');
     } catch (err) {
       setError("Google Login failed.");
