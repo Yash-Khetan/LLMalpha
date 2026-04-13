@@ -6,26 +6,26 @@ DocuMind is a full-stack application that lets users upload PDF documents and qu
 
 ## 🚀 Features
 
-- **PDF Upload & Processing** — Drop in any PDF and DocuMind extracts, chunks, and indexes the content automatically
-- **Semantic Search** — Questions are embedded and matched against document chunks using cosine similarity
-- **Streamed AI Responses** — Answers stream token-by-token using Gemini, providing a real-time chat experience
-- **Chat History** — All Q&A pairs are persisted and restored across sessions
-- **Firebase Authentication** — Secure Google & email/password login with per-user document isolation
-- **Per-User Rate Limiting** — 2 LLM queries per hour to protect API key usage
-- **Deploy-Ready** — Configured for Vercel (frontend) + Render (backend) with environment-based configuration
+- **PDF Upload & Processing** — Drop in any PDF and DocuMind extracts, chunks, and indexes the content automatically.
+- **Semantic Search** — Questions are embedded and matched against document chunks using cosine similarity.
+- **Streamed AI Responses** — Answers stream token-by-token using Gemini, providing a real-time chat experience.
+- **Document History** — All Q&A pairs and active documents are persisted. Swap between past uploaded documents without re-uploading.
+- **JWT Authentication** — Fast, self-contained custom authentication system using `bcryptjs` and `jsonwebtoken`.
+- **Per-User Rate Limiting & Waitlist** — 2 LLM queries per hour to protect API key usage, gracefully triggering an "Upgrade to Pro" redirect and a waitlist sign-up feature.
+- **Deploy-Ready** — Configured for Vercel (frontend) + Render (backend) with environment-based configuration and fully handled CORS policies.
 
 ---
 
 ## 🧠 System Architecture
 
-```
-Frontend (React + Vite)  →  Firebase Auth  →  Backend (Express.js)
-                                                  ↓
-                                        PDF Upload → Text Extraction → Chunking → Embeddings
-                                                  ↓
-                                          PostgreSQL (Neon DB)
-                                                  ↓
-                                   Query → Embedding → Similarity Search → Gemini LLM → Streamed Response
+```text
+Frontend (React + Vite)  →   Custom JWT Auth   →  Backend (Express.js)
+                                                      ↓
+                                            PDF Upload → Text Extraction → Chunking → Embeddings
+                                                      ↓
+                                              PostgreSQL (Neon DB)
+                                                      ↓
+                                    Query → Embedding → Similarity Search → Gemini LLM → Streamed Response
 ```
 
 ---
@@ -36,11 +36,11 @@ Frontend (React + Vite)  →  Firebase Auth  →  Backend (Express.js)
 |-------|-----------|
 | **Frontend** | React 19, Vite, React Router, Lucide Icons |
 | **Backend** | Node.js, Express.js |
-| **Auth** | Firebase Authentication (Google + Email/Password) |
+| **Auth** | Custom JWT Token Authentication with Bcrypt hash |
 | **AI / ML** | Gemini API (Embeddings + Generation) |
 | **Database** | PostgreSQL (Neon DB) via Drizzle ORM |
 | **File Processing** | Multer (memory storage), pdf-parse |
-| **Security** | Helmet, CORS, Firebase Admin SDK, express-rate-limit |
+| **Security** | Helmet, CORS, express-rate-limit |
 
 ---
 
@@ -49,9 +49,10 @@ Frontend (React + Vite)  →  Firebase Auth  →  Backend (Express.js)
 ### Users
 | Column | Type |
 |--------|------|
-| `id` | TEXT (Firebase UID) |
+| `id` | UUID |
 | `email` | TEXT |
 | `name` | TEXT |
+| `password` | TEXT |
 | `created_at` | TIMESTAMP |
 
 ### Documents
@@ -59,7 +60,7 @@ Frontend (React + Vite)  →  Firebase Auth  →  Backend (Express.js)
 |--------|------|
 | `id` | UUID |
 | `name` | TEXT |
-| `user_id` | TEXT (FK → Users) |
+| `user_id` | UUID (FK → Users) |
 | `uploaded_at` | TIMESTAMP |
 
 ### Chunks
@@ -79,38 +80,39 @@ Frontend (React + Vite)  →  Firebase Auth  →  Backend (Express.js)
 | `response` | TEXT |
 | `created_at` | TIMESTAMP |
 
+### Waitlist Users
+| Column | Type |
+|--------|------|
+| `id` | UUID |
+| `email` | TEXT |
+| `created_at` | TIMESTAMP |
+
 ---
 
 ## 📡 API Endpoints
 
-All routes (except `/`) require a valid Firebase ID token in the `Authorization: Bearer <token>` header.
+Protected routes require a `Authorization: Bearer <token>` JWT header.
 
-| Method | Route | Description |
-|--------|-------|-------------|
-| `GET` | `/` | Health check |
-| `GET` | `/api/history` | Fetch user's latest document and chat history |
-| `POST` | `/api/upload` | Upload a PDF — extracts, chunks, embeds, and stores |
-| `POST` | `/api/query` | Ask a question — streams the LLM response in real time |
-
-### Query Body
-```json
-{
-  "documentId": "uuid",
-  "question": "What does section 3 say about compliance?"
-}
-```
+| Method | Route | Auth Needed | Description |
+|--------|-------|-------------|-------------|
+| `POST` | `/api/register`| ❌ No | Register a new user |
+| `POST` | `/api/login`   | ❌ No | Login and receive a JWT |
+| `POST` | `/api/waitlist`| ❌ No | Join the Pro Waitlist |
+| `GET`  | `/api/history` | ✅ Yes | Fetch user's document history and current chats |
+| `POST` | `/api/upload`  | ✅ Yes | Upload a PDF — extracts, chunks, embeds, and stores |
+| `POST` | `/api/query`   | ✅ Yes | Ask a question — streams the LLM response in real time |
 
 ---
 
 ## 🔄 Pipeline
 
 ### Ingestion
-```
+```text
 PDF Upload → Text Extraction → Chunking (400 chars, 100 overlap) → Embedding (Gemini) → PostgreSQL
 ```
 
 ### Retrieval
-```
+```text
 User Query → Embed Query → Cosine Similarity vs Stored Chunks → Top 3 Chunks → Gemini LLM → Streamed Response
 ```
 
@@ -121,22 +123,21 @@ User Query → Embed Query → Cosine Similarity vs Stored Chunks → Top 3 Chun
 ### Prerequisites
 - Node.js 18+
 - A Neon PostgreSQL database
-- A Firebase project with Authentication enabled
 - A Gemini API key
 
 ### Backend
 ```bash
 cd backend
 npm install
-# Create .env with: DATABASE_URL, GEMINI_API_KEY, FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY
-npm start
+# Create .env with: DATABASE_URL, GEMINI_API_KEY, JWT_SECRET, FRONTEND_URL
+npm run dev
 ```
 
 ### Frontend
 ```bash
 cd frontend
 npm install
-# Create .env with: VITE_FIREBASE_API_KEY, VITE_FIREBASE_AUTH_DOMAIN, VITE_FIREBASE_PROJECT_ID, etc.
+# Create .env with: VITE_API_URL
 npm run dev
 ```
 
@@ -151,9 +152,9 @@ npm run dev
 
 ### Environment Variables
 
-**Render (Backend):** `DATABASE_URL`, `GEMINI_API_KEY`, `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, `FRONTEND_URL`
+**Render (Backend):** `DATABASE_URL`, `GEMINI_API_KEY`, `JWT_SECRET`, `FRONTEND_URL`
 
-**Vercel (Frontend):** `VITE_API_URL`, `VITE_FIREBASE_API_KEY`, `VITE_FIREBASE_AUTH_DOMAIN`, `VITE_FIREBASE_PROJECT_ID`, `VITE_FIREBASE_STORAGE_BUCKET`, `VITE_FIREBASE_MESSAGING_SENDER_ID`, `VITE_FIREBASE_APP_ID`
+**Vercel (Frontend):** `VITE_API_URL`
 
 ---
 
@@ -162,7 +163,6 @@ npm run dev
 - PDF extraction may produce noisy text from complex layouts
 - No OCR support for scanned/image-based PDFs
 - Linear similarity search (not optimized for millions of chunks)
-- Single-document context per session
 
 ---
 
@@ -179,12 +179,7 @@ npm run dev
 ## 💡 Key Learnings
 
 - Built an end-to-end RAG pipeline from scratch without high-level abstractions
-- Implemented streaming LLM responses from backend to frontend using chunked transfer encoding
-- Designed a secure multi-tenant system with Firebase Auth + per-user data isolation
-- Explored trade-offs in chunking strategies, embedding models, and retrieval methods
-
----
-
-## 📌 Summary
-
-DocuMind demonstrates how unstructured documents can be transformed into queryable knowledge systems using modern AI techniques. The project focuses on practical system design — retrieval logic, streaming architecture, authentication, and production deployment — rather than relying on off-the-shelf RAG frameworks.
+- Handled CORS configuration across strictly decoupled frontend/backend instances
+- Engineered streaming LLM responses via chunked transfer encoding (TextDecoder)
+- Designed an autonomous custom JWT-powered Authentication System from scratch
+- Developed a robust rate-limiting architecture combined with responsive UX degradation.
